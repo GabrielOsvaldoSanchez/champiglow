@@ -9,6 +9,8 @@ extends Node3D
 @export var amanita_mushroom_scenes: Array[PackedScene] = []
 @export var mushroom_scale := 1.0
 @export var mushroom_grow_time := 1.5
+@export var growth_days := 28.0
+
 
 @export var living_tree_models: PackedStringArray = ["MapleTree"]
 @export var tree_radius := 1.5
@@ -44,6 +46,7 @@ var array_amanita_particles: Array = []
 
 var _last_wind_angle := INF
 
+var _pending_mushrooms: Array[Dictionary] = []
 
 # Busca el slider o botón dentro de la escena instanciada
 func _find(node: Node, type: String) -> Node:
@@ -155,15 +158,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_H: _set_fungus(1 - chosen_fungus)
 
 # ---------- Hongos -------------
+
+func _update_pending_mushrooms() -> void:
+	var now: float = $sky.elapsed_days
+	for i in range(_pending_mushrooms.size() - 1, -1, -1):
+		if now >= _pending_mushrooms[i]["ready_at"]:
+			_grow_amanita(_pending_mushrooms[i]["pos"])
+			_pending_mushrooms.remove_at(i)
+
 func _on_amanita_landed(spore: Node3D, pos: Vector3) -> void:
 	array_amanita_particles.erase(spore)
 	var flat := Vector2(pos.x, pos.z)
 	var nearest := INF
 	for t in _living_tree_positions:
 		nearest = minf(nearest, flat.distance_to(t))
-	print("Aterrizó en ", pos, " | árbol vivo más cercano a ", snappedf(nearest, 0.1))
 	if _is_near_living_tree(pos):
-		_grow_amanita(pos)
+		_pending_mushrooms.append({"pos": pos, "ready_at": $sky.elapsed_days + growth_days})
 
 
 func _grow_amanita(pos: Vector3) -> void:
@@ -197,9 +207,9 @@ func _collect_living_trees() -> void:
 				if not meshes.is_empty():
 					origin = (meshes[0] as Node3D).global_position
 				_living_tree_positions.append(Vector2(origin.x, origin.z))
-				print("Árbol vivo: ", tree.name, " en ", origin)
+				#print("Árbol vivo: ", tree.name, " en ", origin)
 				break
-	print("Árboles vivos encontrados: ", _living_tree_positions.size())
+	
 
 func _is_near_living_tree(pos: Vector3) -> bool:
 	var flat := Vector2(pos.x, pos.z)
@@ -213,7 +223,7 @@ func _is_near_living_tree(pos: Vector3) -> bool:
 func generate_particle() -> void:
 	var scene := amanita_scene if chosen_fungus == 0 else mycena_scene
 	if not scene:
-		print("No se ha añadido la escena en el Inspector")
+		print("No tiene nada la amanita_scene")
 		return
 
 	var mouse_pos := get_viewport().get_mouse_position()
@@ -223,7 +233,7 @@ func generate_particle() -> void:
 	var new_particle = scene.instantiate()
 	add_child(new_particle)
 	new_particle.global_position = ray_origin + ray_direction * 5.0
-	print("Espora nace en ", new_particle.global_position)
+	
 
 	if new_particle.has_method("fetch_environmental_factors"):
 		new_particle.fetch_environmental_factors(wind_force)
@@ -237,6 +247,7 @@ func generate_particle() -> void:
 
 func _process(_delta: float) -> void:
 	update_wind_from_pivot()
+	_update_pending_mushrooms()
 
 	if $sky.time_of_day >= 18.0:
 		if not is_night:
