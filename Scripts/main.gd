@@ -10,6 +10,10 @@ extends Node3D
 @export var mushroom_scale := 1.0
 @export var mushroom_grow_time := 1.5
 
+@export var living_tree_models: PackedStringArray = ["MapleTree"]
+@export var tree_radius := 1.5
+var _living_tree_positions: Array[Vector2] = []
+
 @export_flags_3d_physics var mushroom_layer: int = 8
 
 @onready var label_time = $CanvasLayer/Interface/Label_Time
@@ -66,7 +70,7 @@ func _ready() -> void:
 	_set_humidity(humidity_percentage)
 	_update_time_label()
 	_update_fungus_label()
-
+	_collect_living_trees()
 
 # ---------- teclas e interfaz ----------
 func _set_temperature(v: float) -> void:
@@ -153,11 +157,17 @@ func _unhandled_input(event: InputEvent) -> void:
 # ---------- Hongos -------------
 func _on_amanita_landed(spore: Node3D, pos: Vector3) -> void:
 	array_amanita_particles.erase(spore)
-	_grow_amanita(pos)
+	var flat := Vector2(pos.x, pos.z)
+	var nearest := INF
+	for t in _living_tree_positions:
+		nearest = minf(nearest, flat.distance_to(t))
+	print("Aterrizó en ", pos, " | árbol vivo más cercano a ", snappedf(nearest, 0.1))
+	if _is_near_living_tree(pos):
+		_grow_amanita(pos)
 
 
 func _grow_amanita(pos: Vector3) -> void:
-	if amanita_mushroom_scenes.is_empty():
+	if amanita_mushroom_scenes.is_empty() || amanita_mushroom_scenes[0] == null:
 		push_warning("No hay estos hongos")
 		return
 
@@ -173,6 +183,32 @@ func _grow_amanita(pos: Vector3) -> void:
 	mushroom.scale = Vector3.ONE * target * 0.01
 	create_tween().tween_property(mushroom, "scale", Vector3.ONE * target, mushroom_grow_time)
 
+func _collect_living_trees() -> void:
+	_living_tree_positions.clear()
+	for node in find_children("*", "Node3D", true, false):
+		var tree := node as Node3D
+		var file_name := tree.scene_file_path.get_file()
+		if file_name.is_empty():
+			continue
+		for model in living_tree_models:
+			if file_name.begins_with(model):
+				var origin := tree.global_position
+				var meshes := tree.find_children("*", "MeshInstance3D", true, false)
+				if not meshes.is_empty():
+					origin = (meshes[0] as Node3D).global_position
+				_living_tree_positions.append(Vector2(origin.x, origin.z))
+				print("Árbol vivo: ", tree.name, " en ", origin)
+				break
+	print("Árboles vivos encontrados: ", _living_tree_positions.size())
+
+func _is_near_living_tree(pos: Vector3) -> bool:
+	var flat := Vector2(pos.x, pos.z)
+	var max_dist_sq := tree_radius * tree_radius
+	for tree_pos in _living_tree_positions:
+		if flat.distance_squared_to(tree_pos) <= max_dist_sq:
+			return true
+	return false
+
 # ---------- partículas ----------
 func generate_particle() -> void:
 	var scene := amanita_scene if chosen_fungus == 0 else mycena_scene
@@ -185,8 +221,9 @@ func generate_particle() -> void:
 	var ray_direction: Vector3 = $Camera3D.project_ray_normal(mouse_pos)
 
 	var new_particle = scene.instantiate()
-	new_particle.global_position = ray_origin + ray_direction * 5.0
 	add_child(new_particle)
+	new_particle.global_position = ray_origin + ray_direction * 5.0
+	print("Espora nace en ", new_particle.global_position)
 
 	if new_particle.has_method("fetch_environmental_factors"):
 		new_particle.fetch_environmental_factors(wind_force)

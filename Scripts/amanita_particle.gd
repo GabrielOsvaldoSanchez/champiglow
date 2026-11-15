@@ -17,8 +17,8 @@ var _has_landed := false
 
 func _ready() -> void:
 	rigid_body.gravity_scale = 0.1
-	# La espora solo choca con el suelo: ni con otras esporas ni con los hongos nuevos.
-	rigid_body.collision_layer = 1 << 1   # capa 2
+	# La espora solo choca con el suelo
+	rigid_body.collision_layer = 1 << 1 
 	rigid_body.collision_mask = ground_mask
 	rigid_body.contact_monitor = true
 	rigid_body.max_contacts_reported = 1
@@ -55,8 +55,6 @@ func _physics_process(_delta: float) -> void:
 
 
 func _emit_landing() -> void:
-	# Punto exacto de la superficie bajo la espora (el raycast va aquí porque
-	# el espacio físico solo es accesible dentro de _physics_process).
 	var origin := rigid_body.global_position
 	var query := PhysicsRayQueryParameters3D.create(
 		origin + Vector3.UP * 0.1, origin + Vector3.DOWN * 0.3, ground_mask)
