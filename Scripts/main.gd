@@ -6,6 +6,12 @@ extends Node3D
 
 @export var wind_force: Vector3 = Vector3.ZERO   # (se calcula desde el pivote)
 
+@export var amanita_mushroom_scenes: Array[PackedScene] = []
+@export var mushroom_scale := 1.0
+@export var mushroom_grow_time := 1.5
+
+@export_flags_3d_physics var mushroom_layer: int = 8
+
 @onready var label_time = $CanvasLayer/Interface/Label_Time
 @onready var label_temperature = $CanvasLayer/Interface/Label_Temperature
 @onready var label_humidity = $CanvasLayer/Interface/Label_Humidity
@@ -144,6 +150,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_SPACE: _toggle_time()
 		KEY_H: _set_fungus(1 - chosen_fungus)
 
+# ---------- Hongos -------------
+func _on_amanita_landed(spore: Node3D, pos: Vector3) -> void:
+	array_amanita_particles.erase(spore)
+	_grow_amanita(pos)
+
+
+func _grow_amanita(pos: Vector3) -> void:
+	if amanita_mushroom_scenes.is_empty():
+		push_warning("No hay estos hongos")
+		return
+
+	var mushroom := amanita_mushroom_scenes[0].instantiate() as Node3D
+	add_child(mushroom)
+	mushroom.global_transform = Transform3D(Basis(Vector3.UP, randf() * TAU), pos)
+
+	var body := mushroom as CollisionObject3D
+	if body:
+		body.collision_layer = mushroom_layer
+
+	var target := mushroom_scale * randf_range(0.9, 1.1)
+	mushroom.scale = Vector3.ONE * target * 0.01
+	create_tween().tween_property(mushroom, "scale", Vector3.ONE * target, mushroom_grow_time)
 
 # ---------- partículas ----------
 func generate_particle() -> void:
@@ -165,6 +193,7 @@ func generate_particle() -> void:
 
 	if chosen_fungus == 0:
 		array_amanita_particles.append(new_particle)
+		new_particle.landed.connect(_on_amanita_landed)
 	else:
 		array_mycena_particles.append(new_particle)
 
